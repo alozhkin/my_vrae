@@ -5,25 +5,41 @@ import numpy as np
 from keras import layers, Input, Model
 from keras import backend as K
 from keras.callbacks import LambdaCallback
-
+def remove_element(L, arr):
+    ind = 0
+    size = len(L)
+    while ind != size and not np.array_equal(L[ind], arr):
+        ind += 1
+    if ind != size:
+        L.pop(ind)
+    else:
+        raise ValueError('array not found in list.')
 # Seed value
 # Apparently you may use different seed values at each stage
-seed_value= 0
+from keras.layers import Lambda
+
+from CentNN import centroid_neural_net
+
+seed_value = 0
 
 # 1. Set `PYTHONHASHSEED` environment variable at a fixed value
 import os
-os.environ['PYTHONHASHSEED']=str(seed_value)
+
+os.environ['PYTHONHASHSEED'] = str(seed_value)
 
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
+
 random.seed(seed_value)
 
 # 3. Set `numpy` pseudo-random generator at a fixed value
 import numpy as np
+
 np.random.seed(seed_value)
 
 # 4. Set the `tensorflow` pseudo-random generator at a fixed value
 import tensorflow as tf
+
 tf.random.set_seed(seed_value)
 # for later versions:
 # tf.compat.v1.set_random_seed(seed_value)
@@ -47,7 +63,7 @@ def sampling(args):
 def vae_loss(input_x, decoder1, z_log_sigma, z_mean):
     recon = 0.00003 * K.sum(K.binary_crossentropy(input_x, decoder1))
     # recon = 0.003 * K.sqrt(K.mean(K.square(input_x - decoder1), axis=-1))
-    kl = 0.5 * K.sum(K.exp(z_log_sigma) + K.square(z_mean) - 1. - z_log_sigma)
+    kl = 0.05 * K.sum(K.exp(z_log_sigma) + K.square(z_mean) - 1. - z_log_sigma)
     # recon = K.print_tensor(recon)
     # kl = K.print_tensor(kl)
     return recon + kl
@@ -108,11 +124,12 @@ y_train = y[:-200]
 
 x_train, x_val = x_train / float(websites_num), x_val / float(websites_num)
 
+# bb = np.average(x_train, axis=1).reshape(-1,1)
+
 m.fit(x_train, x_train,
-      epochs=20,
+      epochs=4,
       batch_size=40,
       validation_data=(x_val, x_val))
-
 
 m.save('/home/user/stuff/nn/lab2/my_vrae/resources')
 # m = keras.models.load_model('/home/user/stuff/nn/lab2/my_vrae/resources')
@@ -157,26 +174,96 @@ for el in latent_encoder_space:
     centroids.append(centers[centroid_idx])
     centroid_idxs.append(centroid_idx)
 
-
 a = percentile_list = pd.DataFrame(
     {'expected': yk,
-     # 'result': km_pred
      'result': centroid_idxs
      })
 
-# plt.hist(a, 9)
-# plt.show()
-
-# fig, ax = plt.subplots()
-# plt.figure(figsize=(10,8))
-# bins = np.linspace(0, 8, 40)
-# for ii in a['result'].unique():
-#     subset = a[a['expected'] == ii]['result'].tolist()
-#     ax.hist(subset, bins=9, alpha=0.5, label=f"Cluster {ii}")
-# ax.legend()
-# plt.show()
-
 a = pd.crosstab(a['expected'], a['result'])
+print(a)
+
+a.plot.bar(stacked=True)
+
+
+res = []
+
+w = []
+
+epsilon=0.05
+
+centroid_X = np.average(xk, axis=1)
+
+w.extend(centers)
+
+sorted_points = [[] for _ in range(users_num)]
+
+cluster_elements = []
+for cluster in range(9):
+    cluster_i = []
+    cluster_elements.append(cluster_i)
+
+cluster_lengths = np.zeros(9, dtype=int)
+
+cluster_indices = []
+
+for x in latent_encoder_space:
+    dists = np.sqrt(np.sum((x - w) ** 2, axis=1))
+    index = np.argmin(dists)
+    # add cluster index of data x to a list
+    cluster_indices.append(index)
+
+    # update winner neuron
+    w[index] = w[index] + 1 / (1 + cluster_lengths[index]) * (x - w[index])
+
+    # append data to cluster
+    cluster_elements[index].append(x)
+
+    cluster_lengths[index] += 1
+
+
+for epoch in range(20):
+    loser = 0
+    for i, x in enumerate(latent_encoder_space):
+        dists = np.sqrt(np.sum((x - w) ** 2, axis=1))
+
+        current_cluster_index = np.argmin(dists)
+
+        x_th = i
+        previous_cluster_index = cluster_indices[x_th]
+
+        # check if current neuron is a loser
+        if previous_cluster_index != current_cluster_index:
+            # update winner neuron
+            w[current_cluster_index] = w[current_cluster_index] + (x - w[current_cluster_index]) / (
+                    cluster_lengths[current_cluster_index] + 1)
+
+            # update loser neuron
+            w[previous_cluster_index] = w[previous_cluster_index] - (x - w[previous_cluster_index]) / (
+                    cluster_lengths[previous_cluster_index] - 1)
+
+            # add and remove data to cluster
+            cluster_elements[current_cluster_index] = list(cluster_elements[current_cluster_index])
+            cluster_elements[current_cluster_index].append(x)
+            remove_element(cluster_elements[previous_cluster_index], x)
+
+            # update cluster index
+            cluster_indices[x_th] = current_cluster_index
+
+            cluster_lengths[current_cluster_index] += 1
+            cluster_lengths[previous_cluster_index] -= 1
+
+            loser += 1
+
+    if loser == 0:
+        break
+
+
+a = percentile_list = pd.DataFrame(
+    {'expected': yk,
+     'result': cluster_indices
+     })
+a = pd.crosstab(a['expected'], a['result'])
+print('\n')
 print(a)
 
 a.plot.bar(stacked=True)

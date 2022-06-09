@@ -4,7 +4,7 @@ import keras
 import numpy as np
 from keras import layers, Input, Model
 from keras import backend as K
-from keras.callbacks import LambdaCallback
+
 def remove_element(L, arr):
     ind = 0
     size = len(L)
@@ -14,35 +14,12 @@ def remove_element(L, arr):
         L.pop(ind)
     else:
         raise ValueError('array not found in list.')
-# Seed value
-# Apparently you may use different seed values at each stage
-from keras.layers import Lambda
 
-from CentNN import centroid_neural_net
+seed_value = 42
 
-seed_value = 0
-
-# 1. Set `PYTHONHASHSEED` environment variable at a fixed value
-import os
-
-os.environ['PYTHONHASHSEED'] = str(seed_value)
-
-# 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 
 random.seed(seed_value)
-
-# 3. Set `numpy` pseudo-random generator at a fixed value
-import numpy as np
-
-np.random.seed(seed_value)
-
-# 4. Set the `tensorflow` pseudo-random generator at a fixed value
-import tensorflow as tf
-
-tf.random.set_seed(seed_value)
-# for later versions:
-# tf.compat.v1.set_random_seed(seed_value)
 
 import pandas as pd
 from sklearn.cluster import KMeans, SpectralClustering, OPTICS
@@ -127,7 +104,7 @@ x_train, x_val = x_train / float(websites_num), x_val / float(websites_num)
 # bb = np.average(x_train, axis=1).reshape(-1,1)
 
 m.fit(x_train, x_train,
-      epochs=4,
+      epochs=20,
       batch_size=40,
       validation_data=(x_val, x_val))
 
@@ -180,6 +157,7 @@ a = percentile_list = pd.DataFrame(
      })
 
 a = pd.crosstab(a['expected'], a['result'])
+print('\nVRAE+K-MEANS')
 print(a)
 
 a.plot.bar(stacked=True)
@@ -263,7 +241,7 @@ a = percentile_list = pd.DataFrame(
      'result': cluster_indices
      })
 a = pd.crosstab(a['expected'], a['result'])
-print('\n')
+print('\nCentNN')
 print(a)
 
 a.plot.bar(stacked=True)
